@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: facebook-bot-auto-cookie
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BOT_ID
+        value: render-bot-001
+      - key: FB_EMAIL
+        sync: false # Sẽ set trong Render dashboard
+      - key: FB_PASSWORD
+        sync: false # Sẽ set trong Render dashboard
+      - key: FB_OTPKEY
+        sync: false # Sẽ set trong Render dashboard
+      - key: FIREBASE_PROJECT_ID
+        value: facebook-bot-backup
+      - key: FIREBASE_PRIVATE_KEY_ID
+        value: eee45b97873985f0a5becf259e0cd9735960210e
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false # Sẽ set trong Render dashboard
+      - key: FIREBASE_CLIENT_EMAIL
+        value: firebase-adminsdk-fbsvc@facebook-bot-backup.iam.gserviceaccount.com
+      - key: FIREBASE_CLIENT_ID
+        value: "111731456944411860005"
+      - key: FIREBASE_CLIENT_X509_CERT_URL
+        value: https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40facebook-bot-backup.iam.gserviceaccount.com
+      - key: FIREBASE_DATABASE_URL
+        value: https://facebook-bot-backup.firebaseio.com
+      - key: ENCRYPT_KEY
+        value: your_strong_encryption_key_here_32_chars
+    healthCheckPath: /
+    autoDeploy: true
+    branch: main 

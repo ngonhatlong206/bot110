@@ -1,0 +1,84 @@
+{
+    "language": "vi",
+    "DeveloperMode": false,
+    "autoCreateDB": true,
+    "MAINTENANCE_MODE": false,
+    "iconUnsend": {
+        "status": true,
+        "icon": "❤"
+    },
+    "notiGroup": false,
+    "NOTIFICATION": true,
+    "allowInbox": false,
+    "commandDisabled": [],
+    "eventDisabled": [],
+    "autoClean": true,
+    "ACCESSTOKEN": "",
+    "BOTNAME": "Bot-Vip",
+    "AMDIN_NAME": "Ngô Nhật Long",
+    "FACEBOOK_ADMIN": "https://www.facebook.com/long.ngo.10102006",
+    "PREFIX": "/",
+    "LOGIN": {
+        "EMAIL": "ngonhatlongffff@gmail.com",
+        "PASSWORD": "Nhatlong_10102006",
+        "OTPKEY": ""
+    },
+    "ADMINBOT": [
+        "100070698699374"
+    ],
+    "NDH": [
+        "100070698699374"
+    ],
+    "DATABASE": {
+        "sqlite": {
+            "storage": "antists.sqlite"
+        }
+    },
+    "APPSTATEPATH": "appstate.json",
+    "FCAOption": {
+        "forceLogin": true,
+        "listenEvents": true,
+        "pauseLog": true,
+        "logLevel": "error",
+        "selfListen": true,
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Mobile/15E148 Safari/604.1"
+    },
+    "version": "2.7.12",
+    "menu": {
+        "autoUnsend": {
+            "status": true,
+            "timeOut": 90
+        },
+        "delayUnsend": 60
+    },
+    "log": {
+        "enable": true
+    },
+    "daily": {
+        "cooldownTime": 43200000,
+        "rewardCoin": 1000000
+    },
+    "anti": {
+        "autoUnsend": true,
+        "sendNoti": true,
+        "timeToUnsend": 10
+    },
+    "adminOnly": false,
+    "loto": {
+        "maxPlayers": 10,
+        "getDelay": 8
+    },
+    "cave": {
+        "cooldownTime": 86400
+    },
+    "farm": {
+        "cooldownTime": 300000
+    },
+    "help": {
+        "autoUnsend": true,
+        "delayUnsend": 60
+    },
+    "minecraft": {
+        "APIKEY": ""
+    }
+}
