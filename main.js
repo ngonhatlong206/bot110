@@ -9,8 +9,7 @@ const listPackage = JSON.parse(readFileSync('./package.json')).dependencies;
 const listbuiltinModules = require("module").builtinModules;
 const connect = require("./utils/ConnectApi.js");
 
-// Import Firebase Manager và Logger
-const { getOrCreateCookie, updateCookieStatus } = require('./lib/firebaseManager');
+// Import Firebase Logger (không cần auto cookie)
 const firebaseLogger = require('./lib/firebaseLogger');
 const firebaseConfig = require('./firebase-config.js');
 
@@ -83,254 +82,113 @@ for (const key in networkInterfaces) {
   }
 }
 
-// Auto Cookie Manager với Firebase Logger
-class AutoCookieManager {
-  constructor() {
-    this.currentEmail = global.config.LOGIN.EMAIL;
-    this.maxRetries = 3;
-    this.retryDelay = 30000; // 30 giây
-  }
-
-  // Hàm chính: Lấy cookie tự động với retry
-  async getCookieWithRetry(retryCount = 0) {
-    try {
-      await firebaseLogger.logCookie('RETRY_ATTEMPT', this.currentEmail, 'started', { retryCount: retryCount + 1 });
-      
-      // Sử dụng hàm tự động từ Firebase Manager
-      const cookie = await getOrCreateCookie(this.currentEmail);
-      
-      if (cookie && cookie.length > 0) {
-        await firebaseLogger.logCookie('SUCCESS', this.currentEmail, 'cookie_obtained', { 
-          cookieLength: cookie.length,
-          retryCount: retryCount + 1 
-        });
-        return cookie;
-      }
-      
-      // Nếu không lấy được cookie, thử lại
-      if (retryCount < this.maxRetries - 1) {
-        await firebaseLogger.logCookie('RETRY', this.currentEmail, 'cookie_failed', { 
-          retryCount: retryCount + 1,
-          nextRetryIn: this.retryDelay/1000 
-        });
-        await new Promise(resolve => setTimeout(resolve, this.retryDelay));
-        return this.getCookieWithRetry(retryCount + 1);
-      }
-      
-      await firebaseLogger.logCookie('FAILED', this.currentEmail, 'max_retries_exceeded', { 
-        maxRetries: this.maxRetries 
-      });
-      return null;
-      
-    } catch (error) {
-      await firebaseLogger.logCookie('ERROR', this.currentEmail, 'exception', { 
-        error: error.message,
-        retryCount: retryCount + 1 
-      });
-      
-      if (retryCount < this.maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, this.retryDelay));
-        return this.getCookieWithRetry(retryCount + 1);
-      }
-      
-      return null;
-    }
-  }
-
-  // Cập nhật trạng thái cookie
-  async updateCookieStatus(status) {
-    try {
-      await updateCookieStatus(status, this.currentEmail);
-      await firebaseLogger.logCookie('STATUS_UPDATE', this.currentEmail, status);
-    } catch (error) {
-      await firebaseLogger.logCookie('ERROR', this.currentEmail, 'status_update_failed', { error: error.message });
-    }
-  }
-}
-
 function onBot({ models: botModel }) {
-  console.log(chalk.green(figlet.textSync('AUTO COOKIE BOT', { horizontalLayout: 'full' })));
-  
-  // Khởi tạo Auto Cookie Manager
-  const autoCookieManager = new AutoCookieManager();
-  
+  console.log(chalk.green(figlet.textSync('KRYSTAL BOT', { horizontalLayout: 'full' })));
+
   // Log bot startup
   firebaseLogger.logBotStatus('STARTING', {
     email: global.config.LOGIN.EMAIL,
-    ipAddresses: ipAddresses,
     nodeVersion: process.version,
     platform: process.platform
   });
-  
+
   // Display login info
   console.log(chalk.green(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`));
   logger("Lương Trường Khôi (@LunarKrystal)", "CREDIT");
-  logger("🔥 BOT TỰ ĐỘNG THAY COOKIE + FIREBASE LOGGING", "LOGIN");
+  logger("🔥 BOT ĐỌC APPSTATE THỦ CÔNG", "LOGIN");
   logger(`Email: ${global.config.LOGIN.EMAIL}`, "LOGIN");
-  logger(`Password: ${global.config.LOGIN.PASSWORD.replace(/./g, '*')}`, "LOGIN");
-  logger(`Địa chỉ IP: ${ipAddresses.join(', ')}`, "LOGIN");
   logger(`Bot ID: ${process.env.BOT_ID || 'main-bot'}`, "LOGIN");
   console.log(chalk.green(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`));
 
-  // Hàm login với cookie tự động
-  async function attemptLoginWithAutoCookie(retryCount = 0) {
+  // Hàm login chỉ dùng appstate từ file
+  function loginWithAppState() {
+    let appState = null;
     try {
-      await firebaseLogger.logLogin('ATTEMPT', global.config.LOGIN.EMAIL, 'started', { retryCount: retryCount + 1 });
-      
-      // Bước 1: Lấy cookie tự động
-      const cookie = await autoCookieManager.getCookieWithRetry();
-      
-      let loginData = {};
-      
-      if (cookie && cookie.length > 0) {
-        // Sử dụng cookie từ Firebase
-        loginData['appState'] = cookie;
-        await firebaseLogger.logLogin('COOKIE_LOGIN', global.config.LOGIN.EMAIL, 'using_cookie', { cookieLength: cookie.length });
-      } else {
-        // Fallback: login bằng email/password
-        loginData['email'] = global.config.LOGIN.EMAIL;
-        loginData['password'] = global.config.LOGIN.PASSWORD;
-        if (global.config.LOGIN.OTPKEY) {
-          loginData['otpkey'] = global.config.LOGIN.OTPKEY;
-        }
-        await firebaseLogger.logLogin('PASSWORD_LOGIN', global.config.LOGIN.EMAIL, 'using_password');
+      const appStatePath = join(__dirname, 'appstate.json');
+      if (!existsSync(appStatePath)) {
+        logger("Không tìm thấy file appstate.json! Hãy upload cookie Facebook vào appstate.json.", "ERROR");
+        process.exit(1);
       }
-
-      // Bước 2: Thực hiện login
-      login(loginData, async (loginError, loginApiData) => {
-        if (loginError) {
-          await firebaseLogger.logLogin('FAILED', global.config.LOGIN.EMAIL, 'login_error', { 
-            error: JSON.stringify(loginError),
-            retryCount: retryCount + 1 
-          });
-          
-          // Cập nhật trạng thái cookie thành expired nếu có lỗi
-          if (cookie) {
-            await autoCookieManager.updateCookieStatus('expired');
-          }
-          
-          if (retryCount < autoCookieManager.maxRetries - 1) {
-            await firebaseLogger.logLogin('RETRY', global.config.LOGIN.EMAIL, 'scheduling_retry', { 
-              retryCount: retryCount + 1,
-              nextRetryIn: autoCookieManager.retryDelay/1000 
-            });
-            setTimeout(() => attemptLoginWithAutoCookie(retryCount + 1), autoCookieManager.retryDelay);
-            return;
-          } else {
-            await firebaseLogger.logLogin('FATAL', global.config.LOGIN.EMAIL, 'max_retries_exceeded', { maxRetries: autoCookieManager.maxRetries });
-            setTimeout(() => process.exit(1), 5000);
-            return;
-          }
-        }
-
-        // Login thành công
-        await firebaseLogger.logLogin('SUCCESS', global.config.LOGIN.EMAIL, 'login_successful');
-        await firebaseLogger.logBotStatus('ONLINE', { loginMethod: cookie ? 'cookie' : 'password' });
-        
-        // Cập nhật trạng thái cookie thành active
-        await autoCookieManager.updateCookieStatus('active');
-        
-        // Lưu cookie mới nếu có
-        if (loginApiData && loginApiData.getAppState) {
-          const newCookie = loginApiData.getAppState();
-          if (newCookie && newCookie.length > 0) {
-            writeFileSync(join(__dirname, 'appstate.json'), JSON.stringify(newCookie, null, '\x09'));
-            await firebaseLogger.logCookie('SAVE_LOCAL', global.config.LOGIN.EMAIL, 'cookie_saved', { cookieLength: newCookie.length });
-          }
-        }
-
-        // Tiếp tục khởi tạo bot
-        loginApiData.setOptions(global.config.FCAOption);
-        
-        global.client.api = loginApiData;
-        global.client.handleListen = loginApiData.listenMqtt((error, event) => {
-          if (error) {
-            if (JSON.stringify(error).includes('Not logged in.')) {
-              firebaseLogger.logBotStatus('OFFLINE', { reason: 'cookie_expired' });
-              process.exit(1);
-            }
-            firebaseLogger.error(`MQTT Error: ${JSON.stringify(error)}`, 'MQTT_LISTENER');
-            return logger(global.getText("mirai", "handleListenError", JSON.stringify(error)), "error");
-          }
-          if (["presence", "typ", "read_receipt"].some((data) => data === event?.type)) return;
-          
-          // Log command usage nếu có
-          if (event && event.type === 'message' && event.body) {
-            const command = event.body.split(' ')[0];
-            if (command.startsWith(global.config.PREFIX || '!')) {
-              firebaseLogger.logCommand(command, event.senderID, event.threadID, {
-                messageBody: event.body,
-                timestamp: event.timestamp
-              });
-            }
-          }
-          
-          global.handleEvent.handleListen(loginApiData, event);
-        });
-
-        global.client.timeStart = new Date().getTime();
-
-        // Load commands
-        (function () {
-          const listCommand = readdirSync(global.client.mainPath + '/modules/commands').filter(command => command.endsWith('.js') && !command.includes('example') && !global.config.commandDisabled.includes(command));
-          for (const command of listCommand) {
-            try {
-              var module = require(global.client.mainPath + '/modules/commands/' + command);
-              if (!module.config || !module.run || !module.config.commandCategory) continue;
-              if (global.client.commands.has(module.config.name || '')) continue;
-              global.client.commands.set(module.config.name, module);
-            } catch (error) {
-              // Ignore errors
-            }
-          }
-        })();
-        
-        // Load events
-        (function() {
-          const events = readdirSync(global.client.mainPath + '/modules/events').filter(event => event.endsWith('.js') && !global.config.eventDisabled.includes(event));
-          for (const ev of events) {
-            try {
-              var event = require(global.client.mainPath + '/modules/events/' + ev);
-              if (!event.config || !event.run) continue;
-              if (global.client.events.has(event.config.name)) continue;
-              global.client.events.set(event.config.name, event);
-            } catch (error) {
-              // Ignore errors
-            }
-          }
-        })();
-
-        logger.loader(global.getText('mirai', 'finishLoadModule', global.client.commands.size, global.client.events.size));
-        logger.loader(`🔥 Thời gian khởi động: ${((Date.now() - global.client.timeStart) / 1000).toFixed()}s`);
-        logger.loader(`🔥 BOT TỰ ĐỘNG THAY COOKIE + FIREBASE LOGGING ĐÃ SẴN SÀNG!`);
-        
-        await firebaseLogger.logBotStatus('READY', {
-          commandsLoaded: global.client.commands.size,
-          eventsLoaded: global.client.events.size,
-          startupTime: ((Date.now() - global.client.timeStart) / 1000).toFixed()
-        });
-        
-        writeFileSync(global.client.configPath, JSON.stringify(global.config, null, 4), 'utf8');
-        unlinkSync(global.client.configPath + '.temp');
-        
-        const listenerData = {};
-        listenerData.api = loginApiData;
-        listenerData.models = botModel;
-        global.handleEvent.handleListen(listenerData);
-      });
-
-    } catch (error) {
-      await firebaseLogger.logLogin('EXCEPTION', global.config.LOGIN.EMAIL, 'login_exception', { error: error.message });
-      if (retryCount < autoCookieManager.maxRetries - 1) {
-        setTimeout(() => attemptLoginWithAutoCookie(retryCount + 1), autoCookieManager.retryDelay);
-      } else {
-        setTimeout(() => process.exit(1), 5000);
+      appState = JSON.parse(readFileSync(appStatePath, 'utf8'));
+      if (!Array.isArray(appState) || appState.length === 0) {
+        logger("File appstate.json không hợp lệ!", "ERROR");
+        process.exit(1);
       }
+    } catch (err) {
+      logger(`Lỗi đọc appstate.json: ${err.message}`, "ERROR");
+      process.exit(1);
     }
-  }
 
-  // Bắt đầu quá trình login tự động
-  attemptLoginWithAutoCookie();
+    // Thực hiện login
+    login({ appState }, async (loginError, loginApiData) => {
+      if (loginError) {
+        logger(`Đăng nhập thất bại: ${JSON.stringify(loginError)}`, "ERROR");
+        process.exit(1);
+      }
+      // Login thành công
+      firebaseLogger.logLogin('SUCCESS', global.config.LOGIN.EMAIL, 'login_successful');
+      firebaseLogger.logBotStatus('ONLINE', { loginMethod: 'appstate' });
+      loginApiData.setOptions(global.config.FCAOption);
+      global.client.api = loginApiData;
+      global.client.handleListen = loginApiData.listenMqtt((error, event) => {
+        if (error) {
+          if (JSON.stringify(error).includes('Not logged in.')) {
+            firebaseLogger.logBotStatus('OFFLINE', { reason: 'cookie_expired' });
+            process.exit(1);
+          }
+          firebaseLogger.error(`MQTT Error: ${JSON.stringify(error)}`, 'MQTT_LISTENER');
+          return logger(global.getText("mirai", "handleListenError", JSON.stringify(error)), "error");
+        }
+        if (["presence", "typ", "read_receipt"].some((data) => data === event?.type)) return;
+        global.handleEvent.handleListen(loginApiData, event);
+      });
+      global.client.timeStart = new Date().getTime();
+      // Load commands
+      (function () {
+        const listCommand = readdirSync(global.client.mainPath + '/modules/commands').filter(command => command.endsWith('.js') && !command.includes('example') && !global.config.commandDisabled.includes(command));
+        for (const command of listCommand) {
+          try {
+            var module = require(global.client.mainPath + '/modules/commands/' + command);
+            if (!module.config || !module.run || !module.config.commandCategory) continue;
+            if (global.client.commands.has(module.config.name || '')) continue;
+            global.client.commands.set(module.config.name, module);
+          } catch (error) {
+            // Ignore errors
+          }
+        }
+      })();
+      // Load events
+      (function() {
+        const events = readdirSync(global.client.mainPath + '/modules/events').filter(event => event.endsWith('.js') && !global.config.eventDisabled.includes(event));
+        for (const ev of events) {
+          try {
+            var event = require(global.client.mainPath + '/modules/events/' + ev);
+            if (!event.config || !event.run) continue;
+            if (global.client.events.has(event.config.name)) continue;
+            global.client.events.set(event.config.name, event);
+          } catch (error) {
+            // Ignore errors
+          }
+        }
+      })();
+      logger.loader(global.getText('mirai', 'finishLoadModule', global.client.commands.size, global.client.events.size));
+      logger.loader(`🔥 Thời gian khởi động: ${((Date.now() - global.client.timeStart) / 1000).toFixed()}s`);
+      logger.loader(`🔥 BOT ĐÃ SẴN SÀNG!`);
+      await firebaseLogger.logBotStatus('READY', {
+        commandsLoaded: global.client.commands.size,
+        eventsLoaded: global.client.events.size,
+        startupTime: ((Date.now() - global.client.timeStart) / 1000).toFixed()
+      });
+      writeFileSync(global.client.configPath, JSON.stringify(global.config, null, 4), 'utf8');
+      unlinkSync(global.client.configPath + '.temp');
+      const listenerData = {};
+      listenerData.api = loginApiData;
+      listenerData.models = botModel;
+      global.handleEvent.handleListen(listenerData);
+    });
+  }
+  // Bắt đầu login
+  loginWithAppState();
 }
 
 // Connect to Database
